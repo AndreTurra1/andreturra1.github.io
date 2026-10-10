@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>A Máquina de Copy</title>
+<meta name="description" content="O processo completo pra escrever copy com IA: do pedido da peça até o resultado virar regra pra próxima peça.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ground:#f4f2ee; --surface:#fbfaf7; --ink:#16161a; --ink-2:#3d3d47; --muted:#6b6b76;
+  --line:#d9d5cc; --accent:#d9480f; --accent-soft:#fde3d4; --gate:#a16207; --gate-fill:#fbefc9;
+  --node:#ffffff; --bad:#b42318; --bad-soft:#fbdcd8; --good:#1f7a4d; --good-soft:#d7efe2; --hl:#ffe45c; --dim:.28;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#121216; --surface:#1a1a20; --ink:#f1efe9; --ink-2:#c4c2bb; --muted:#94939b;
+    --line:#2f2f38; --accent:#ff7a3d; --accent-soft:#3a2216; --gate:#f2b94b; --gate-fill:#33280f;
+    --node:#1f1f26; --bad:#ff8a7a; --bad-soft:#3b1d1a; --good:#5fd39b; --good-soft:#163326; --hl:#7a6a00;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#121216; --surface:#1a1a20; --ink:#f1efe9; --ink-2:#c4c2bb; --muted:#94939b;
+  --line:#2f2f38; --accent:#ff7a3d; --accent-soft:#3a2216; --gate:#f2b94b; --gate-fill:#33280f;
+  --node:#1f1f26; --bad:#ff8a7a; --bad-soft:#3b1d1a; --good:#5fd39b; --good-soft:#163326; --hl:#7a6a00;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--ground);color:var(--ink);font-family:Inter,system-ui,sans-serif;font-size:15px;line-height:1.6;margin:0;padding:0 16px}
+.wrap{max-width:1320px;margin:0 auto;padding-block:36px 72px}
+h1,h2{font-family:'Archivo Black',Inter,sans-serif;font-weight:400;line-height:1.05;text-wrap:balance;margin:0;letter-spacing:-.01em}
+h1{font-size:clamp(34px,5vw,58px)}
+h2{font-size:clamp(24px,3vw,32px);margin-bottom:8px}
+h3{font-size:17px;margin:0 0 6px}
+mark.hl{background:var(--hl);color:inherit;padding:0 2px;border-radius:2px}
+.eyebrow{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.lede{max-width:74ch;font-size:16.5px;color:var(--ink-2);margin:14px 0 0}
+.lede strong{color:var(--ink)}
+section{margin-top:56px;scroll-margin-top:16px}
+.sub{max-width:70ch;color:var(--muted);margin:0 0 18px}
+code,.mono{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12.5px}
+a{color:var(--accent)}
+button{font:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.toc{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+.toc a{font-size:13px;font-weight:600;text-decoration:none;color:var(--ink);border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px}
+.toc a:hover{border-color:var(--accent)}
+
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:26px 0 14px}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:8px 16px;font-size:13.5px;font-weight:600;display:inline-flex;align-items:center;gap:8px}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn[disabled]{opacity:.4;cursor:default}
+.hint{font-size:13px;color:var(--muted)}
+.progress{font-size:12.5px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
+.explorer{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:20px;align-items:start}
+.stage{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:14px 10px 10px;overflow-x:auto}
+.stage svg{display:block;width:100%;min-width:720px;height:auto;color:var(--ink)}
+.legend{display:flex;flex-wrap:wrap;gap:18px;font-size:12.5px;color:var(--muted);padding:8px 8px 2px}
+.legend span{display:inline-flex;align-items:center;gap:8px}
+.sw{width:22px;height:0;border-top:2px solid}
+
+.t{font-family:Inter,sans-serif;font-size:13px;font-weight:700;fill:currentColor;pointer-events:none}
+.s{font-family:Inter,sans-serif;font-size:11px;fill:var(--muted);pointer-events:none}
+.h{font-family:'Archivo Black',sans-serif;font-size:12px;letter-spacing:.12em;fill:var(--muted)}
+.el{font-family:Inter,sans-serif;font-size:11px;font-weight:600}
+.node{cursor:pointer;transition:opacity .25s}
+.node rect{fill:var(--node);stroke:currentColor;stroke-width:1.2;transition:stroke-width .2s,fill .2s}
+.node.gate rect{fill:var(--gate-fill);stroke:var(--gate);stroke-width:1.8}
+.node.learn rect{stroke:var(--good);stroke-width:1.6}
+.node:hover rect{stroke-width:2.4}
+.node.sel rect{stroke:var(--accent);stroke-width:3;fill:var(--accent-soft)}
+.node.gate.sel rect{stroke:var(--gate);fill:var(--gate-fill)}
+.node.bad rect,.node.gate.bad rect{stroke:var(--bad);stroke-width:3;fill:var(--bad-soft)}
+.node.pulse rect{animation:pulse 1.1s ease-in-out infinite}
+@keyframes pulse{50%{stroke-width:3.4}}
+.edge{fill:none;transition:opacity .25s,stroke-width .2s}
+.edge.main{stroke:currentColor;stroke-width:1.2}
+.edge.gate{stroke:var(--gate);stroke-width:1.4}
+.edge.learn{stroke:var(--good);stroke-width:1.6}
+.edge.hot{stroke-width:2.8}
+.elabel.main{fill:var(--muted)} .elabel.gate{fill:var(--gate)} .elabel.learn{fill:var(--good)}
+svg.focus .node:not(.on){opacity:var(--dim)}
+svg.focus .edge:not(.hot),svg.focus .elabel:not(.hot){opacity:var(--dim)}
+.dot{fill:var(--accent);stroke:var(--ground);stroke-width:2}
+.dot.gate{fill:var(--gate)}
+
+.panel{position:sticky;top:16px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:20px 22px;max-height:calc(100vh - 32px);overflow-y:auto}
+.panel .kicker{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:0}
+.panel .kicker.gate{color:var(--gate)}
+.panel h3{font-family:'Archivo Black',sans-serif;font-weight:400;font-size:24px;line-height:1.1;margin:6px 0 4px}
+.panel .q{margin:0 0 14px;color:var(--muted);font-size:14px}
+.panel h4{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:18px 0 6px}
+.panel ul{margin:0;padding-left:18px;display:grid;gap:5px;font-size:14px}
+.panel p{margin:0;font-size:14px}
+.io{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.io div{border:1px solid var(--line);border-radius:4px;padding:8px 10px;font-size:13px}
+.io b{display:block;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.links{display:flex;flex-direction:column;gap:6px;font-size:13.5px}
+.links a{display:flex;justify-content:space-between;gap:10px;text-decoration:none;border-bottom:1px solid var(--line);padding:4px 0}
+.links a span{color:var(--muted);font-size:11.5px;white-space:nowrap}
+.piece{border:1px solid var(--line);background:var(--node);border-radius:6px;padding:12px 14px;font-size:14px;white-space:pre-line;line-height:1.55}
+.piece mark{background:var(--bad-soft);color:var(--bad);border-radius:3px;padding:0 2px;text-decoration:line-through;text-decoration-thickness:1px}
+.piece ins{text-decoration:none;background:var(--good-soft);border-radius:3px;padding:0 2px}
+.tag{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;border-radius:3px;padding:2px 7px;margin-bottom:8px;background:var(--line);color:var(--ink)}
+.verdict{display:grid;gap:4px;font-family:'JetBrains Mono',monospace;font-size:12px}
+.verdict .r{color:var(--bad)} .verdict .a{color:var(--gate)} .verdict .ok{color:var(--good)}
+.close{display:none}
+@media (max-width:1080px){
+  .explorer{grid-template-columns:1fr}
+  .panel{position:fixed;left:12px;right:12px;bottom:12px;top:auto;max-height:58vh;z-index:10;box-shadow:0 10px 40px rgba(0,0,0,.25)}
+  .panel[data-empty="true"]{display:none}
+  .close{display:inline-flex;position:absolute;right:12px;top:12px;border:1px solid var(--line);background:var(--node);color:var(--ink);border-radius:999px;width:30px;height:30px;align-items:center;justify-content:center}
+}
+
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px 18px}
+.card p{margin:0;font-size:14px;color:var(--ink-2)}
+.card .n{font-family:'Archivo Black',sans-serif;color:var(--accent);font-size:13px;letter-spacing:.06em}
+.vs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;font-size:13px}
+.vs div{border-radius:6px;padding:8px 10px}
+.vs .frio{background:var(--bad-soft)} .vs .quente{background:var(--good-soft)}
+.vs b{display:block;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase}
+.q7{counter-reset:q;display:grid;gap:10px;padding:0;list-style:none}
+.q7 li{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 16px 12px 56px;position:relative;font-size:14.5px}
+.q7 li::before{counter-increment:q;content:counter(q,lower-alpha);position:absolute;left:16px;top:10px;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;display:grid;place-items:center}
+.q7 li b{display:block}
+.check{display:grid;gap:8px;padding:0;list-style:none;max-width:80ch}
+.check label{display:flex;gap:10px;align-items:flex-start;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 14px;font-size:14.5px;cursor:pointer}
+.check input{margin-top:4px;accent-color:var(--accent);width:16px;height:16px}
+.check input:checked + span{color:var(--muted);text-decoration:line-through}
+footer{margin-top:64px;padding-top:20px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+@media (max-width:560px){.vs{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){.node.pulse rect{animation:none}html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Treinamento de copy com IA</div>
+    <h1>A máquina de copy, <mark class="hl">ao vivo</mark></h1>
+    <p class="lede">Copy ruim quase nunca é problema de redação, <strong>é problema de contexto</strong>, porque a IA escreve bem mas escreve errado quando não sabe pra quem fala, o que já vendeu e o que prova cada frase. <strong>Clique em qualquer caixa</strong> pra ver o que acontece ali, ou aperte <strong>Simular uma peça</strong> e acompanhe um anúncio de exemplo atravessando o processo inteiro, reprovando, voltando e virando regra nova.</p>
+    <nav class="toc" aria-label="Nesta página">
+      <a href="#mapa">O mapa</a><a href="#reguas">As 5 réguas da escrita</a><a href="#headline">Headline</a><a href="#sete">As 7 perguntas</a><a href="#visual">Peça visual</a><a href="#regras">Regras que seguram</a><a href="#checklist">Checklist</a>
+    </nav>
+  </header>
+
+  <section id="mapa" style="margin-top:28px">
+  <div class="toolbar">
+    <button class="btn primary" id="play" type="button">▶ Simular uma peça</button>
+    <button class="btn" id="prev" type="button" disabled>◀ Voltar</button>
+    <button class="btn" id="next" type="button">Avançar ▶</button>
+    <button class="btn" id="reset" type="button">Limpar</button>
+    <span class="progress" id="progress"></span>
+    <span class="hint">Dica: use as setas ← → pra andar na simulação.</span>
+  </div>
+
+  <div class="explorer">
+    <div class="stage">
+      <svg id="map" viewBox="0 0 960 700" role="img" aria-label="Mapa interativo do processo de copy: pedido, leis, ficha, contexto alimentado pelos bancos, escrita, gates de máquina, revisão humana e leitura do resultado, com os dois ciclos de aprendizado.">
+        <defs>
+          <marker id="m-main" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker>
+          <marker id="m-gate" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--gate)"/></marker>
+          <marker id="m-learn" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--good)"/></marker>
+        </defs>
+        <text class="h" x="145" y="186" text-anchor="middle">BANCOS DA EMPRESA</text>
+        <text class="h" x="480" y="14" text-anchor="middle">A PEÇA</text>
+        <text class="h" x="815" y="386" text-anchor="middle">APRENDIZADO</text>
+        <g id="edges"></g><g id="nodes"></g><g id="dots"></g>
+      </svg>
+      <div class="legend">
+        <span><i class="sw" style="border-color:currentColor"></i>caminho da peça</span>
+        <span><i class="sw" style="border-color:var(--gate)"></i>gate que barra</span>
+        <span><i class="sw" style="border-color:var(--good)"></i>ciclo de aprendizado</span>
+      </div>
+    </div>
+    <aside class="panel" id="panel" data-empty="false" aria-live="polite">
+      <button class="close" id="close" type="button" aria-label="Fechar painel">✕</button>
+      <div id="panel-body"></div>
+    </aside>
+  </div>
+  </section>
+
+  <section id="reguas">
+    <h2>As 5 réguas da escrita, <mark class="hl">porque a IA erra pra baixo</mark></h2>
+    <p class="sub">O defeito de fábrica da IA é sair bonita, sóbria e morna, com cara de relatório, então a escrita roda com as cinco réguas ao mesmo tempo, e na dúvida entre a versão sóbria e a quente, a quente está certa. O freio é a prova, nunca o bom gosto.</p>
+    <div class="cards">
+      <div class="card"><div class="n">1 · CLAREZA</div><h3>Quem, o quê e em relação a quê</h3><p>"A diferença" sem dizer diferença entre o quê, ou "quem passou" sem dizer passou pra onde, reprova. Fecho de efeito que não informa ("fica a dica") sai e entra o fato.</p></div>
+      <div class="card"><div class="n">2 · CONSCIÊNCIA ZERO</div><h3>Escreva pra quem não sabe que a solução existe</h3><p>Nenhum termo, ator ou mecanismo de dentro da solução entra sem antes existir na cabeça do lead. O benefício vem no mundo dele e contradiz a crença errada principal; o mecanismo é a explicação que vem depois. Teste: pra cada palavra, "que X? como assim? por que isso importa pra mim?".</p></div>
+      <div class="card"><div class="n">3 · QUENTE</div><h3>Ação, exagero e nome próprio</h3><p>O gancho abre pela ação, não pelo cenário, e pega o assunto que o público inteiro está vendo. A frase seca que fecha o assunto vira promessa absurda seguida da pergunta do lead, na voz dele.</p>
+        <div class="vs"><div class="frio"><b>Frio</b>"Eu estou no evento e resolvi perguntar..."</div><div class="quente"><b>Quente</b>"PERGUNTEI PRA UM ESTRANGEIRO NO MAIOR EVENTO DO ANO..."</div></div></div>
+      <div class="card"><div class="n">4 · PROSA</div><h3>Ligue com "mas", "porque", "e", "então"</h3><p>Ponto final picando ideia é cara de IA. Parágrafo comprido se quebra na vírgula, nunca com ponto no meio, e no celular cada parágrafo tem uma ou duas linhas.</p>
+        <div class="vs"><div class="frio"><b>Picado</b>"Os clientes também pensavam. Até descobrirem."</div><div class="quente"><b>Prosa</b>"A gente esperava descobrir a melhor ferramenta, mas ninguém lá estava discutindo isso."</div></div></div>
+      <div class="card"><div class="n">5 · O NÓ DO CANAL</div><h3>Cada canal tem a sua régua</h3><p>Anúncio segue a estrutura fixa e o vocabulário que a plataforma aceita, mensagem de WhatsApp cabe na tela sem o "ler mais", página é bloco escaneável, e no vídeo vertical a fala termina no fecho e a chamada é só texto, uma por plataforma.</p></div>
+    </div>
+  </section>
+
+  <section id="headline">
+    <h2>Headline: <mark class="hl">fala só do leitor</mark>, nunca de "nós"</h2>
+    <p class="sub">Toda headline e todo título de seção passam por quatro guardrails, e levam o trecho da virada pintado de amarelo, como os títulos desta página.</p>
+    <div class="cards">
+      <div class="card"><div class="n">CADEIA DO DESEJO</div><p>De baixo pra cima: o mercado de verdade (saúde, dinheiro ou relacionamento), o veículo que a pessoa escolheu, a camada que ela quer pôr em cima e o que precisa ser verdade pra funcionar. Todo argumento se pendura num degrau.</p></div>
+      <div class="card"><div class="n">4 FUNÇÕES (BOB BLY)</div><p>Seleciona o público, prende a atenção, entrega a mensagem completa e puxa pra próxima linha com pergunta aberta, nunca com revelação seca que mata a curiosidade.</p></div>
+      <div class="card"><div class="n">4 U'S (MASTERSON E BLY)</div><p>Útil, urgente, única e ultra-específica, nota de 1 a 4, com 3 ou mais em pelo menos três delas.</p></div>
+      <div class="card"><div class="n">A FORMA QUE MAIS APROVA</div><p>Expectativa ou elogio, mais "mas" ou "só que", mais a virada: <em>"A sua IA é mais inteligente que qualquer pessoa que você já contratou, <mark class="hl">só que ninguém nunca ensinou nada pra ela</mark>."</em></p></div>
+      <div class="card"><div class="n">HEADLINE EM VÍDEO</div><p>"Legenda de episódio": narrador em terceira pessoa anunciando o acontecimento, com uma pessoa nomeada e a consequência escondida ("O dia em que a Cida descobriu..."). Uma frase, caixa alta, faixa vermelha rasgada na altura do olhar.</p></div>
+    </div>
+  </section>
+
+  <section id="sete">
+    <h2>A passada final, <mark class="hl">frase por frase</mark></h2>
+    <p class="sub">Revisar o texto inteiro esconde o erro, porque a gente sabe o princípio e erra na hora de aplicar. Antes de entregar, cada frase responde as sete perguntas.</p>
+    <ol class="q7">
+      <li><b>Pedaço</b>Lida em pedaços pelo lead, algum pedaço só informa ou faz ele perguntar "e daí? quem é você?"</li>
+      <li><b>Curiosidade</b>A frase revela algo seco e mata a pergunta que a anterior abriu?</li>
+      <li><b>Prosa</b>Tem ponto separando o que devia estar ligado com "mas", "porque", "e", "então"?</li>
+      <li><b>Destaque</b>É headline ou título de seção? O trecho da virada está em amarelo?</li>
+      <li><b>Culpa</b>A frase põe o defeito no lead em vez de pôr na ferramenta ou no caminho?</li>
+      <li><b>Vala comum</b>Usa palavra que qualquer concorrente usaria (memória, especialista, método, sistema pronto)? Troque pelo nome do que só você tem.</li>
+      <li><b>Referência vaga</b>"Isso", "lá", "na volta" dizem de quê?</li>
+    </ol>
+  </section>
+
+  <section id="visual">
+    <h2>Peça visual: <mark class="hl">a diagramação é metade da peça</mark></h2>
+    <div class="cards">
+      <div class="card"><div class="n">CARROSSEL CARD A CARD</div><p>Cada card tem um papel na corrente e um protagonista só: número gigante, prova recortada no ponto que prova, gráfico, versus em dois painéis ou foto boa. Cor com significado, a de ganho só no ganho, e conferência pelo olho, card por card, até zerar defeito.</p></div>
+      <div class="card"><div class="n">RÉGUA DO REELS</div><p>No vertical 1080×1920, o que importa mora na faixa que aparece sempre (de 243 a 1695 de altura, de 57 a 1017 de largura), longe do cabeçalho, da legenda e da coluna de botões. O quadro fica cheio de ponta a ponta.</p></div>
+      <div class="card"><div class="n">IMAGEM INTEIRA</div><p>Foto sobe inteira pra ferramenta de design e se corta lá, pelo recorte da própria imagem, pra quem revisa poder reenquadrar.</p></div>
+    </div>
+  </section>
+
+  <section id="regras">
+    <h2>As regras que <mark class="hl">seguram o sistema</mark></h2>
+    <p class="sub">Se uma delas cai, a máquina produz copy bonita e errada.</p>
+    <div class="cards">
+      <div class="card"><div class="n">HISTÓRIA NÃO SE INVENTA</div><p>Fato de cliente só com transcrição rastreável, e citação é colada, nunca redigida. Na dúvida, sai.</p></div>
+      <div class="card"><div class="n">NÚMERO SÓ COM FONTE</div><p>Dado de mercado vem de uma fonte verificada, ou não entra. Quente é exagero de tom, nunca de fato.</p></div>
+      <div class="card"><div class="n">CONTEXTO CERTO, NÃO MAIS CONTEXTO</div><p>No máximo três arquivos por camada, porque janela cheia devolve copy genérica.</p></div>
+      <div class="card"><div class="n">INTELIGÊNCIA MORA ONDE É CONSUMIDA</div><p>Régua nova vai pro arquivo que a IA carrega, numa versão só, e o que dá pra detectar vira gate. Régua escrita em dois lugares é bug.</p></div>
+    </div>
+  </section>
+
+  <section id="checklist">
+    <h2>Checklist de saída <mark class="hl">da peça</mark></h2>
+    <p class="sub">Marque enquanto confere. Nada fica salvo, é só pra usar na hora.</p>
+    <ul class="check">
+      <li><label><input type="checkbox"><span>A ficha formato × função foi aberta e a peça cumpre o critério de cada parte?</span></label></li>
+      <li><label><input type="checkbox"><span>Cada afirmação forte tem prova, e cada número tem fonte?</span></label></li>
+      <li><label><input type="checkbox"><span>O lead de consciência zero entende cada frase sem perguntar "que X?"</span></label></li>
+      <li><label><input type="checkbox"><span>O gancho abre pela ação, tem um exagero e um nome próprio?</span></label></li>
+      <li><label><input type="checkbox"><span>A passada frase por frase (as sete perguntas) foi feita?</span></label></li>
+      <li><label><input type="checkbox"><span>A headline passa nas 4 funções e nos 4 U's, fala só do leitor e tem a virada em amarelo?</span></label></li>
+      <li><label><input type="checkbox"><span>Passou nos gates de máquina?</span></label></li>
+      <li><label><input type="checkbox"><span>Saiu com o bloco de proveniência, e o teste muda um pilar só?</span></label></li>
+    </ul>
+  </section>
+
+  <footer>A Máquina de Copy · material de aula de André Turra · os exemplos da simulação são ilustrativos.</footer>
+</div>
+
+<script>
+(() => {
+const L = {
+  reguas:["#reguas","As 5 réguas da escrita"], headline:["#headline","Guardrails da headline"], sete:["#sete","As 7 perguntas, frase por frase"],
+  visual:["#visual","Peça visual"], regras:["#regras","As regras que seguram"], checklist:["#checklist","Checklist de saída"],
+};
+const N = [
+ {id:"pedido",x:380,y:24,w:200,h:40,t:"Pedido de peça",pill:true,k:"Entrada",q:"Alguém pede uma copy nova.",
+  do:["Pode vir em linguagem comum: \"escreve um anúncio pra quem faz bolo em casa\".","Ninguém precisa citar o processo: as skills disparam sozinhas quando o pedido é copy pública.","Peça que já converte não passa por aqui; só peça nova ou peça que falhou."],
+  io:["o pedido","a peça classificada"],links:["checklist"]},
+ {id:"leis",x:330,y:96,w:300,h:54,t:"0 · Leis fundamentais",s:"desejo, consciência, sofisticação, pilares",k:"Passo 0",q:"O que nunca muda, em nenhuma peça?",
+  do:["Qual desejo o lead já diz com as próprias palavras (copy não cria desejo, canaliza).","Em que nível de consciência ele está: no público de escala, quase sempre consciente do DESEJO e inconsciente do MECANISMO.","Quantas vezes o mercado já ouviu essa promessa (sofisticação), e a forma da promessa que isso pede.","Estrutura fixa da peça: dog whistle (pra quem é), desejo, mecanismo com prova, chamada."],
+  rule:"Método de terceiro nunca vira espinha. A ordem é: as leis, o seu método, a peça real que já vendeu, o número do fim do funil, e só então o livro, pra dar nome ao que o dado já mostrou.",
+  io:["o pedido","o diagnóstico do mercado"],links:["regras"]},
+ {id:"ficha",x:330,y:178,w:300,h:54,t:"1 · Classificar e abrir a ficha",s:"formato × função = anatomia e critérios",k:"Passo 1",q:"Que peça é essa?",
+  do:["Achar o par formato × função (copy de anúncio × captação, mensagem × lembrete de aula, página × oferta).","Abrir a ficha: o trabalho da peça, a anatomia parte por parte e o critério objetivo de cada parte.","Pedido ambíguo: a IA pergunta UMA coisa objetiva em vez de chutar."],
+  rule:"Sem ficha, não se redige. É o que impede a peça certa no momento errado do funil.",io:["a peça classificada","anatomia + critérios"],links:["checklist"]},
+ {id:"contexto",x:330,y:260,w:300,h:54,t:"2 · Montar o contexto (C0 a C5)",s:"máx. 3 arquivos por camada",k:"Passo 2",q:"O que dizer, e com que lastro?",
+  do:["C0 regras duras · C1 a ficha · C2 quem é o lead · C3 o que já vendeu · C4 a prova · C5 método de terceiro.","Camada de baixo nunca contradiz camada de cima; se contradiz, ganha a de cima e a IA diz isso.","Do que já vendeu se extrai o MECANISMO, nunca o texto.","Falta prova? A resposta é \"não temos prova pra isso ainda\", nunca um encaixe forçado."],
+  rule:"Contexto certo, não mais contexto. Janela cheia devolve copy genérica.",io:["anatomia + bancos","o que dizer, com fonte"],links:["regras"]},
+ {id:"voz",x:330,y:340,w:300,h:54,t:"3 · Escrever com a voz",s:"clara, quente, pra consciência zero",k:"Passo 3",q:"Com que força cada frase sai?",
+  do:["Clareza: toda frase diz quem, o quê e em relação a quê.","Consciência zero: nada de dentro da solução entra sem antes existir na cabeça do lead.","Quente: gancho pela ação, exagero de tom, nome próprio no exemplo.","Prosa: frases ligadas com mas, porque, e, então. Cada canal com a sua régua."],
+  rule:"Na dúvida entre a versão sóbria e a quente, a quente está certa. O freio é a prova, nunca o bom gosto.",io:["o que dizer","a peça escrita"],links:["reguas","headline"]},
+ {id:"gates",x:330,y:420,w:300,h:54,t:"4 · Gates de máquina",s:"forma, vocabulário, números, tamanho",kind:"gate",k:"Passo 4",kc:"gate",q:"A forma está limpa?",
+  do:["Scripts barram: travessão, jargão de quem faz marketing (funil, lead) dentro da peça, palavra que a plataforma reprova, frase picotada.","Barram número de mercado sem fonte verificada.","Na mensagem de WhatsApp, barram texto que cai no \"ler mais\".","Reprovou: volta pro passo 3 e reescreve."],
+  rule:"O gate pega FORMA, nunca FORÇA. Peça que passa no gate ainda pode ser morna.",io:["a peça escrita","aprovada ou reprovada"],links:["regras"]},
+ {id:"revisao",x:330,y:500,w:300,h:54,t:"5 · Revisão humana",s:"frase por frase + CUB + dono da voz",k:"Passo 5",q:"Confunde, não dá pra acreditar, entedia?",
+  do:["Passada frase por frase, com as 7 perguntas.","Leitura CUB em três leituras separadas: Confusing, Unbelievable, Boring. Cada falha é trocada por uma promessa, nunca só apagada.","O dono da voz revisa (R1, R2) e a peça volta com etiqueta de ajuste."],
+  rule:"Toda revisão do dono gera inteligência nova no mesmo dia: diferença nomeada, régua atualizada, gate atualizado.",io:["a peça aprovada no gate","a peça final + as correções"],links:["sete"]},
+ {id:"resultado",x:330,y:580,w:300,h:54,t:"6 · No ar e leitura do resultado",s:"pelo fim do funil, um pilar por teste",k:"Passo 6",q:"Vendeu, e por quê?",
+  do:["A peça sai com o bloco de proveniência: ficha, público, mecanismo, prova e o que é aposta.","Julgamento pelo custo por venda do produto principal, não pelo custo da entrada barata.","Causa de morte tem três nomes: plataforma reprovou, pilar quebrado ou saturação (só depois de escalar muito)."],
+  rule:"Teste muda UM pilar por vez, com o corpo idêntico.",io:["a peça no ar","o veredito pelo fim do funil"],links:["checklist"]},
+ {id:"c2",x:40,y:200,w:210,h:44,t:"C2 · Quem é o lead",s:"vocabulário, personas, oferta",kind:"bank",k:"Banco C2",q:"Com quem a peça fala?",
+  do:["Vocabulário que atrai o público que compra, e o que atrai quem só curte e não compra.","Personas e o degrau de oferta certo.","Fonte: comentários, pesquisa e conversa com quem já comprou."],io:["pesquisa + compradores","vocabulário e dor"],links:["reguas"]},
+ {id:"c3",x:40,y:258,w:210,h:44,t:"C3 · O que já vendeu",s:"dossiês de anúncio, insights",kind:"bank",k:"Banco C3",q:"Que mecanismo já trouxe venda no seu público?",
+  do:["Dossiês dos anúncios com o porquê de cada um ter convertido.","Insights com número e fonte.","É daqui que sai o mecanismo, nunca a frase copiada."],rule:"Só vencedor vira padrão.",io:["anúncios analisados","mecanismo com número"],links:["regras"]},
+ {id:"c4",x:40,y:316,w:210,h:44,t:"C4 · A prova",s:"histórias, depoimentos, fontes",kind:"bank",k:"Banco C4",q:"O que sustenta cada afirmação?",
+  do:["Banco de histórias, verbatim com minutagem.","Depoimentos de clientes cortados em pílulas curtas.","Provas externas: fonte pública, notícia, dado oficial."],rule:"Fato de depoimento não se inventa. Citação é colada, nunca redigida.",io:["prints, vídeos, fontes","prova rastreável"],links:["regras"]},
+ {id:"c0",x:40,y:436,w:210,h:44,t:"C0 · Regras duras",s:"o que é proibido",kind:"bank",k:"Camada C0",q:"O que nunca pode sair?",
+  do:["As proibições da marca: palavra vetada, forma de falar preço, promessa que não se faz.","Não é fonte de conteúdo: é filtro, e alimenta os gates."],io:["decisões do dono","o que os gates barram"],links:["regras"]},
+ {id:"regua",x:710,y:396,w:210,h:62,t:"Régua nova no canônico",t2:"+ gate, no mesmo dia",s:"cada diferença ganha nome",kind:"learn",k:"Ciclo de aprendizado 1",q:"O que a correção do dono ensina?",
+  do:["A diferença entre a peça da IA e a correção ganha NOME.","Vira régua no arquivo que a IA carrega (um lugar só).","Se dá pra detectar por texto, vira regra no gate.","Passada de volta nas peças abertas."],rule:"Inteligência mora onde é consumida. Régua escrita em dois lugares é bug.",io:["a correção","voz e gate atualizados"],links:["regras"]},
+ {id:"insight",x:710,y:584,w:210,h:46,t:"Insight registrado",s:"só vencedor vira padrão",kind:"learn",k:"Ciclo de aprendizado 2",q:"O que o resultado ensina?",
+  do:["O padrão que venceu vira insight com número e fonte.","Volta pro banco C3 e vira contexto da próxima peça."],rule:"O que funcionou vai pro registro de resultado, não pra biblioteca de métodos de terceiro.",io:["o veredito","insight no banco"],links:["regras"]},
+];
+const E = [
+ {id:"pedido-leis",f:"pedido",to:"leis",d:"M480 64 L480 94",c:"main"},
+ {id:"leis-ficha",f:"leis",to:"ficha",d:"M480 150 L480 176",c:"main"},
+ {id:"ficha-contexto",f:"ficha",to:"contexto",d:"M480 232 L480 258",c:"main"},
+ {id:"contexto-voz",f:"contexto",to:"voz",d:"M480 314 L480 338",c:"main"},
+ {id:"voz-gates",f:"voz",to:"gates",d:"M480 394 L480 418",c:"main"},
+ {id:"gates-revisao",f:"gates",to:"revisao",d:"M480 474 L480 498",c:"main"},
+ {id:"revisao-resultado",f:"revisao",to:"resultado",d:"M480 554 L480 578",c:"main"},
+ {id:"c2-contexto",f:"c2",to:"contexto",d:"M250 222 L290 222 L290 274 L328 274",c:"main"},
+ {id:"c3-contexto",f:"c3",to:"contexto",d:"M250 280 L328 287",c:"main"},
+ {id:"c4-contexto",f:"c4",to:"contexto",d:"M250 338 L290 338 L290 300 L328 300",c:"main"},
+ {id:"c0-gates",f:"c0",to:"gates",d:"M250 460 L328 460",c:"main"},
+ {id:"gates-voz",f:"gates",to:"voz",d:"M330 432 L306 432 L306 372 L326 372",c:"gate",l:["reprovou,","reescreve"],lx:300,ly:406,la:"end"},
+ {id:"revisao-regua",f:"revisao",to:"regua",d:"M630 527 L815 527 L815 460",c:"learn",l:["o dono corrigiu"],lx:645,ly:520},
+ {id:"regua-voz",f:"regua",to:"voz",d:"M815 396 L815 367 L632 367",c:"learn",l:["atualiza a voz"],lx:645,ly:360},
+ {id:"regua-gates",f:"regua",to:"gates",d:"M710 447 L632 447",c:"learn",l:["vira gate"],lx:645,ly:440},
+ {id:"resultado-insight",f:"resultado",to:"insight",d:"M630 607 L708 607",c:"learn"},
+ {id:"insight-c3",f:"insight",to:"c3",d:"M815 630 L815 672 L18 672 L18 280 L38 280",c:"learn",l:["o que vendeu volta pro banco e vira contexto da próxima peça"],lx:416,ly:665,la:"middle"},
+];
+const V1 = `Uma oportunidade <mark>real</mark> de ter uma renda extra <mark>—</mark> com receitas <mark>exclusivas</mark> e suporte.
+<mark>Nosso método</mark> faz tudo por você.
+Clique em saiba mais.`;
+const V2 = `<ins>Você que faz bolo pra família no domingo:</ins> já pensou em tirar <ins>3 MIL POR MÊS</ins> vendendo esse mesmo bolo pelo WhatsApp, sem sair de casa?
+Parece bom demais, mas tem explicação: as padarias do seu bairro <ins>não dão conta das encomendas de aniversário</ins>, e quem encomenda paga ADIANTADO.
+Clica em saiba mais.`;
+const V3 = `Você que faz bolo pra família no domingo: já pensou em tirar 3 MIL POR MÊS vendendo esse mesmo bolo pelo WhatsApp, sem sair de casa?
+Parece bom demais, mas tem explicação: as padarias do seu bairro não dão conta das encomendas de aniversário, e quem encomenda paga ADIANTADO. <ins>Foi assim que a Cida começou, com 4 encomendas na primeira semana.</ins>
+<ins>Clica AGORA em saiba mais e pega a lista das 5 receitas que mais vendem por encomenda</ins>, pra fazer o seu primeiro pedido ainda este mês.`;
+const S = [
+ {n:"pedido",e:[],h:"Chega o pedido",p:"\"Escreve um anúncio de captação pra quem faz bolo em casa.\" Ninguém citou processo nenhum: a skill de contexto dispara sozinha."},
+ {n:"leis",e:["pedido-leis"],h:"Antes de escrever, as Leis",p:"Público de escala: quer renda extra, não sabe que existe um caminho simples (consciente do desejo, inconsciente do mecanismo). Promessa direta, prova colada. Estrutura: pra quem é, desejo, mecanismo com prova, chamada."},
+ {n:"ficha",e:["leis-ficha"],h:"Classifica e abre a ficha",p:"Formato: copy de anúncio. Função: captação. A ficha diz o trabalho da peça e o critério de cada parte."},
+ {n:"contexto",e:["ficha-contexto","c2-contexto","c3-contexto","c4-contexto"],also:["c2","c3","c4"],h:"Puxa os bancos",p:"C2: o vocabulário de quem faz bolo em casa e quer renda. C3: o mecanismo de um anúncio que já vendeu abrindo por quem a pessoa é. C4: a história real de uma aluna. Máximo 3 arquivos por camada."},
+ {n:"voz",e:["contexto-voz"],h:"Primeira versão (a IA erra pra baixo)",piece:V1,tag:"v1",p:"Sem querer, a primeira escrita sai morna: sem pra quem é, sem número, com palavra de juramento e com o método da casa no gancho."},
+ {n:"gates",e:["voz-gates","c0-gates"],bad:true,h:"O gate barra",verdict:[["r","REPROVA  TRAVESSAO  \"—\""],["r","REPROVA  VALA_COMUM  \"exclusivas\""],["a","AVISO    JURAMENTO  \"real\""],["a","AVISO    MECANISMO_DA_CASA_NO_GANCHO  \"método\""]],p:"Duas reprovas e dois avisos. A peça não segue: volta pra escrita."},
+ {n:"voz",e:["gates-voz"],gateDot:true,h:"Reescreve quente e com os pilares",piece:V2,tag:"v2",p:"Pra quem é na primeira palavra, promessa com número, \"parece bom demais, mas tem explicação\" e o mecanismo logo em seguida, no mundo dela."},
+ {n:"gates",e:["voz-gates"],h:"Agora passa",verdict:[["ok","Passou no gate de FORMA."],["ok","0 número de mercado sem fonte."]],p:"Passar no gate não quer dizer que a peça é forte. Isso é trabalho da revisão humana."},
+ {n:"revisao",e:["gates-revisao"],h:"Frase por frase e revisão do dono",p:"Confunde? Não. Dá pra acreditar? A promessa está sem ninguém real atrás: falta prova de pessoa. Entedia? A chamada vende a tarefa (\"clica\"), não o ganho. O dono marca as duas no R1."},
+ {n:"regua",e:["revisao-regua"],h:"A correção vira regra",p:"Diferença nomeada: \"chamada de captação sem o que o lead ganha\". Vira régua no arquivo da voz, e o gate passa a avisar chamada sem ganho. No mesmo dia."},
+ {n:"voz",e:["regua-voz","regua-gates"],also:["gates"],h:"Voz e gate atualizados, peça ajustada",piece:V3,tag:"v3",p:"Entra a prova de uma pessoa real colada na promessa e uma chamada que diz o que ela leva. A próxima peça já nasce com essa régua."},
+ {n:"resultado",e:["revisao-resultado"],also:["revisao"],h:"No ar, lida pelo fim do funil",p:"A peça sai com o bloco de proveniência. O veredito vem pelo custo por venda do produto principal, não pelo lead barato."},
+ {n:"insight",e:["resultado-insight"],h:"Vendeu? Vira insight",p:"O padrão (\"quem a pessoa é no gancho + prova de uma pessoa real cedo\") é registrado com o número e a fonte."},
+ {n:"c3",e:["insight-c3"],h:"Volta pro banco",p:"O insight entra no banco do que já vendeu. A próxima peça começa daqui, um degrau acima."},
+];
+const svg=document.getElementById("map"),NS="http://www.w3.org/2000/svg";
+const mk=(tag,a,p)=>{const el=document.createElementNS(NS,tag);for(const k in a)el.setAttribute(k,a[k]);p&&p.appendChild(el);return el;};
+const byId=Object.fromEntries(N.map(n=>[n.id,n])),nodeEl={},edgeEl={},labelEl={};
+for(const e of E){
+  edgeEl[e.id]=mk("path",{d:e.d,class:`edge ${e.c}`,"marker-end":`url(#m-${e.c})`},document.getElementById("edges"));
+  if(e.l){const t=mk("text",{class:`el elabel ${e.c}`,x:e.lx,y:e.ly,"text-anchor":e.la||"start"},document.getElementById("edges"));
+    e.l.forEach((line,i)=>{const ts=mk("tspan",{x:e.lx,dy:i?14:0},t);ts.textContent=line;});labelEl[e.id]=t;}
+}
+for(const n of N){
+  const g=mk("g",{class:`node ${n.kind||""}`,tabindex:0,role:"button","aria-label":n.t},document.getElementById("nodes"));
+  mk("rect",{x:n.x,y:n.y,width:n.w,height:n.h,rx:n.pill?20:4},g);
+  const left=n.kind==="bank"||n.kind==="learn",tx=left?n.x+16:n.x+n.w/2,anchor=left?"start":"middle";
+  const lines=[[n.t,"t"]];if(n.t2)lines.push([n.t2,"t"]);if(n.s)lines.push([n.s,"s"]);
+  let y=n.y+n.h/2-((lines.length-1)*16)/2+4;
+  for(const [txt,cls] of lines){const t=mk("text",{class:cls,x:tx,y,"text-anchor":anchor},g);t.textContent=txt;y+=16;}
+  g.addEventListener("click",()=>{stopPlay();select(n.id);});
+  g.addEventListener("keydown",ev=>{if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();stopPlay();select(n.id);}});
+  nodeEl[n.id]=g;
+}
+const panel=document.getElementById("panel"),body=document.getElementById("panel-body");
+const esc=s=>s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+function clearMarks(){svg.classList.remove("focus");Object.values(nodeEl).forEach(g=>g.classList.remove("sel","on","bad","pulse"));Object.values(edgeEl).forEach(p=>p.classList.remove("hot"));Object.values(labelEl).forEach(p=>p.classList.remove("hot"));}
+function hot(ids){ids.forEach(id=>{edgeEl[id]?.classList.add("hot");labelEl[id]?.classList.add("hot");});}
+function linksHtml(keys){return `<h4>Aprofunde nesta página</h4><div class="links">${keys.map(k=>`<a href="${L[k][0]}">${esc(L[k][1])}<span>↓</span></a>`).join("")}</div>`;}
+function select(id){
+  const n=byId[id];clearMarks();svg.classList.add("focus");nodeEl[id].classList.add("sel","on");
+  const conn=E.filter(e=>e.f===id||e.to===id);
+  conn.forEach(e=>{nodeEl[e.f].classList.add("on");nodeEl[e.to].classList.add("on");});hot(conn.map(e=>e.id));
+  const ins=conn.filter(e=>e.to===id).map(e=>byId[e.f].t.replace(/^\d · /,"")),outs=conn.filter(e=>e.f===id).map(e=>byId[e.to].t.replace(/^\d · /,""));
+  body.innerHTML=`<p class="kicker ${n.kc||""}">${esc(n.k)}</p><h3>${esc(n.t.replace(/^\d · /,""))}${n.t2?" "+esc(n.t2):""}</h3><p class="q">${esc(n.q)}</p>
+    <h4>O que acontece</h4><ul>${n.do.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>
+    ${n.rule?`<h4>Regra que segura</h4><p>${esc(n.rule)}</p>`:""}
+    <h4>Entra e sai</h4><div class="io"><div><b>Entra</b>${esc(n.io[0])}${ins.length?`<br><span class="hint">vem de: ${esc(ins.join(", "))}</span>`:""}</div><div><b>Sai</b>${esc(n.io[1])}${outs.length?`<br><span class="hint">vai pra: ${esc(outs.join(", "))}</span>`:""}</div></div>
+    ${linksHtml(n.links)}`;
+  showPanel();history.replaceState(null,"","#"+id);
+}
+function showPanel(){panel.dataset.empty="false";panel.scrollTop=0;}
+function intro(){
+  clearMarks();
+  body.innerHTML=`<p class="kicker">Como ler</p><h3>Clique numa caixa</h3><p class="q">O painel mostra o que acontece naquele passo, de onde vem e pra onde vai.</p>
+    <h4>As três cores</h4><ul><li><b>Linha escura:</b> o caminho normal da peça.</li><li><b style="color:var(--gate)">Amarelo escuro:</b> o gate que barra e manda reescrever.</li><li><b style="color:var(--good)">Verde:</b> os dois ciclos que fazem o sistema aprender.</li></ul>
+    <h4>Ou veja andando</h4><p>Aperte <b>Simular uma peça</b> e acompanhe um anúncio de exemplo em ${S.length} passos.</p>`;
+  panel.dataset.empty=matchMedia("(max-width:1080px)").matches?"true":"false";
+  document.getElementById("progress").textContent="";
+}
+let step=-1,timer=null,playing=false;
+const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches,dots=document.getElementById("dots");
+function animateDots(ids,gateDot){
+  dots.innerHTML="";if(reduce)return;
+  ids.forEach(id=>{const path=edgeEl[id],len=path.getTotalLength();
+    const c=mk("circle",{r:6,class:"dot"+(gateDot||E.find(e=>e.id===id).c==="gate"?" gate":"")},dots);
+    const dur=Math.max(450,len*4),t0=performance.now();
+    const tick=now=>{const k=Math.min(1,(now-t0)/dur),p=path.getPointAtLength(len*(k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2));
+      c.setAttribute("cx",p.x);c.setAttribute("cy",p.y);if(k<1)requestAnimationFrame(tick);else c.remove();};
+    requestAnimationFrame(tick);});
+}
+function renderStep(i){
+  const s=S[i];clearMarks();svg.classList.add("focus");hot(s.e);
+  s.e.forEach(id=>{const e=E.find(x=>x.id===id);nodeEl[e.f].classList.add("on");});
+  animateDots(s.e,s.gateDot);
+  const cur=nodeEl[s.n];cur.classList.add("on","sel","pulse");if(s.bad)cur.classList.add("bad");
+  (s.also||[]).forEach(id=>nodeEl[id].classList.add("on","pulse"));
+  body.innerHTML=`<p class="kicker ${s.bad?"gate":""}">Simulação · passo ${i+1} de ${S.length}</p><h3>${esc(s.h)}</h3><p class="q">${esc(byId[s.n].t.replace(/^\d · /,""))}</p><p>${esc(s.p)}</p>
+    ${s.piece?`<h4>A peça agora</h4><span class="tag">exemplo ilustrativo · ${s.tag}</span><div class="piece">${s.piece}</div>`:""}
+    ${s.verdict?`<h4>Saída do gate</h4><div class="verdict">${s.verdict.map(([c,t])=>`<span class="${c}">${esc(t)}</span>`).join("")}</div>`:""}
+    <p class="hint" style="margin-top:14px">Clique na caixa pra ver o passo completo.</p>`;
+  showPanel();
+  document.getElementById("progress").textContent=`${i+1} / ${S.length}`;
+  document.getElementById("prev").disabled=i<=0;document.getElementById("next").disabled=i>=S.length-1;
+  history.replaceState(null,"","#sim-"+(i+1));
+}
+function go(i){step=Math.max(0,Math.min(S.length-1,i));renderStep(step);}
+const playBtn=document.getElementById("play");
+function stopPlay(){playing=false;clearTimeout(timer);playBtn.textContent=step>=0&&step<S.length-1?"▶ Continuar":"▶ Simular uma peça";}
+function loop(){if(!playing)return;if(step>=S.length-1){stopPlay();playBtn.textContent="↻ Simular de novo";return;}
+  go(step+1);const s=S[step];timer=setTimeout(loop,2600+(s.piece?3200:0)+(s.verdict?1200:0));}
+playBtn.addEventListener("click",()=>{if(playing){stopPlay();return;}if(step>=S.length-1)step=-1;playing=true;playBtn.textContent="❚❚ Pausar";loop();});
+document.getElementById("next").addEventListener("click",()=>{stopPlay();go(step+1);});
+document.getElementById("prev").addEventListener("click",()=>{stopPlay();go(step-1);});
+document.getElementById("reset").addEventListener("click",()=>{stopPlay();step=-1;playBtn.textContent="▶ Simular uma peça";dots.innerHTML="";document.getElementById("prev").disabled=true;document.getElementById("next").disabled=false;history.replaceState(null,"",location.pathname+location.search);intro();});
+document.getElementById("close").addEventListener("click",()=>{stopPlay();panel.dataset.empty="true";});
+document.addEventListener("keydown",ev=>{if(ev.target.closest&&ev.target.closest("input,textarea"))return;
+  if(ev.key==="ArrowRight"){stopPlay();go(step+1);} if(ev.key==="ArrowLeft"&&step>0){stopPlay();go(step-1);} if(ev.key==="Escape")document.getElementById("reset").click();});
+const h=location.hash.slice(1);
+if(byId[h])select(h);else if(/^sim-\d+$/.test(h))go(+h.slice(4)-1);else intro();
+})();
+</script>
+</body>
+</html>
